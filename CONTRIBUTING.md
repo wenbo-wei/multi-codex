@@ -12,5 +12,5 @@ make verify
 ```
 
 Describe any manual GNOME Shell 50 and Ptyxis checks separately from automated
-tests. A successful package or settings write is not proof that a visible
+checks. A successful package or settings write is not proof that a visible
 Shell button loaded.

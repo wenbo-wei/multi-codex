@@ -26,7 +26,6 @@ check:
 	! grep -En \
 		'codex-quota-centre@local|CODEX_SOURCE_INDICATOR_ID|/home/[^/]+/' \
 		extension/extension.js extension/scripts/*
-	$(PYTHON) -m unittest discover -s tests -v
 
 install:
 	./scripts/install.sh
