@@ -49,7 +49,6 @@ find "$staged_extension" -exec \
 TZ=UTC LC_ALL=C gnome-extensions pack \
   --force \
   --out-dir="$validation_dir" \
-  --extra-source=runtimeCommand.mjs \
   --extra-source=workspaceLayout.mjs \
   --extra-source=workspaceLayoutCli.mjs \
   --extra-source=workspaceWindowPlacement.mjs \

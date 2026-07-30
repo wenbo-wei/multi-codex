@@ -18,7 +18,6 @@ import {
 import {
     collectCompleteWorkspaceWindows,
 } from './workspaceWindowSet.mjs';
-import {runtimeCommandArgv} from './runtimeCommand.mjs';
 
 
 const CODEX_DASHBOARD_ROLE = 'codex-quota-centre@local';
@@ -30,12 +29,12 @@ const COMMAND_TERMINATE_GRACE_MS = 8000;
 const MultiCodexPanelButton = GObject.registerClass(
 class MultiCodexPanelButton extends PanelMenu.Button {
     _init(activate) {
-        super._init(0.5, 'Show Multi Codex workspace', true);
+        super._init(0.5, 'Show Workspace', true);
         this.accessible_role = Atk.Role.PUSH_BUTTON;
         this._activate = activate;
         this.add_style_class_name('multi-codex-button');
         this.add_child(new St.Label({
-            text: 'Multi Codex',
+            text: 'Workspace',
             y_align: Clutter.ActorAlign.CENTER,
         }));
 
@@ -65,10 +64,10 @@ class MultiCodexPanelButton extends PanelMenu.Button {
 export default class MultiCodexExtension extends Extension {
     enable() {
         this._enabled = true;
-        this._commandArgv = runtimeCommandArgv(
-            this.path,
-            parts => GLib.build_filenamev(parts)
-        );
+        this._commandArgv = [
+            GLib.build_filenamev([this.path, 'scripts', 'multi-codex']),
+            '--panel',
+        ];
         this._placing = false;
         this._placeSource = 0;
         this._button = null;

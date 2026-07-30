@@ -1,7 +1,0 @@
-{
-  "uuid": "multi-codex-placement-harness@wenbo",
-  "name": "Multi Codex Placement Harness",
-  "description": "Headless-only regression harness for Multi Codex pre-paint placement.",
-  "shell-version": ["50"],
-  "version": 1
-}

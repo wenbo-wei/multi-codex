@@ -1,8 +1,9 @@
 # Multi Codex
 
 Multi Codex is a small GNOME Shell extension that creates, recalls, and
-arranges six Ptyxis terminals in a 3-by-2 grid. It adds one **Multi Codex**
-button to the GNOME panel.
+arranges six Ptyxis terminals in a 3-by-2 grid. **Multi Codex** is the project
+and repository name; the extension adds one **Workspace** button to the GNOME
+panel.
 
 The extension is intended as a workspace for multiple Codex sessions. It
 opens plain terminal windows; it does not start or authenticate Codex itself.
@@ -37,17 +38,14 @@ Runtime dependencies:
 The current geometry adapter is designed for the tested single-monitor setup.
 Multi-monitor support has not been validated.
 
-## Build and test
+## Build and package
 
-Build and test dependencies are GNU Make, Git, GNOME's `gnome-extensions`
-tool, Node.js 18 or later, Python 3, `ripgrep`, `unzip`, `zip`,
-`dbus-run-session`, `gsettings`, and standard GNU file utilities. A source
-archive without Git metadata can set
-`SOURCE_DATE_EPOCH` explicitly; otherwise packaging uses the latest commit
-timestamp.
+Build dependencies are GNU Make, Git, GNOME's `gnome-extensions` tool,
+`unzip`, `zip`, and standard GNU file utilities. A source archive without Git
+metadata can set `SOURCE_DATE_EPOCH` explicitly; otherwise packaging uses the
+latest commit timestamp.
 
 ```sh
-make test
 make package
 ```
 
@@ -55,18 +53,6 @@ The package is written to:
 
 ```text
 dist/multi-codex@wenbo.shell-extension.zip
-```
-
-Run the isolated GNOME Shell import smoke test with:
-
-```sh
-make smoke
-```
-
-The optional pre-paint integration harness starts temporary Ptyxis windows:
-
-```sh
-make integration
 ```
 
 ## Install
@@ -93,7 +79,7 @@ UUID can be loaded.
 time as the legacy `workspace@wenbo` extension; both would manage the same
 terminal windows.
 
-Disable the legacy extension before enabling Multi Codex:
+Disable the legacy extension before enabling the new extension:
 
 ```sh
 gnome-extensions disable workspace@wenbo
@@ -106,10 +92,7 @@ session automatically.
 ## Repository layout
 
 - `extension/` — files shipped in the GNOME extension package
-- `tests/` — pure Node.js and Python regression tests
-- `harness/` — isolated GNOME Shell integration checks
-- `docs/specs/` — behavioural and packaging requirements
-- `tools/` — package verification helpers
+- `tools/package.sh` — reproducible package builder
 
 ## License
 
