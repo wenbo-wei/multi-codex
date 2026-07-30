@@ -56,7 +56,7 @@ for script in multi-codex open-six-terminals; do
 done
 
 if rg -n -uu \
-    '/home/wenbo|workspace@wenbo|codex-quota/' \
+    '/(home|Users)/[^/ \t\r\n]+/|/root/|workspace@wenbo|codex-quota/' \
     "$extract_dir"; then
   printf 'Package contains a legacy path or unrelated source.\n' >&2
   exit 1

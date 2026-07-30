@@ -13,6 +13,11 @@ tool_dir=$(
     pwd -P
 )
 repository_root=$tool_dir/..
+mkdir -p "$output_dir"
+output_dir=$(
+  CDPATH= cd -- "$output_dir" &&
+    pwd -P
+)
 
 source_date_epoch=${SOURCE_DATE_EPOCH:-}
 if [ -z "$source_date_epoch" ]; then
@@ -34,14 +39,16 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 staged_extension=$staging_root/extension
-mkdir -p "$staged_extension" "$output_dir"
+validation_dir=$staging_root/validated
+canonical_dir=$staging_root/canonical
+mkdir -p "$staged_extension" "$validation_dir" "$canonical_dir"
 cp -a "$repository_root/extension/." "$staged_extension/"
 find "$staged_extension" -exec \
   touch -h --date="@$source_date_epoch" {} +
 
 TZ=UTC LC_ALL=C gnome-extensions pack \
   --force \
-  --out-dir="$output_dir" \
+  --out-dir="$validation_dir" \
   --extra-source=runtimeCommand.mjs \
   --extra-source=workspaceLayout.mjs \
   --extra-source=workspaceLayoutCli.mjs \
@@ -49,3 +56,26 @@ TZ=UTC LC_ALL=C gnome-extensions pack \
   --extra-source=workspaceWindowSet.mjs \
   --extra-source=scripts \
   "$staged_extension"
+
+shopt -s nullglob
+validated_packages=("$validation_dir"/*.shell-extension.zip)
+if [ "${#validated_packages[@]}" -ne 1 ]; then
+  printf 'Expected exactly one validated extension package.\n' >&2
+  exit 1
+fi
+
+unzip -q "${validated_packages[0]}" -d "$canonical_dir"
+find "$canonical_dir" -exec \
+  touch -h --date="@$source_date_epoch" {} +
+file_list=$staging_root/package-files
+(
+  CDPATH= cd -- "$canonical_dir"
+  find . -type f -printf '%P\n' | LC_ALL=C sort > "$file_list"
+)
+
+package=$output_dir/$(basename -- "${validated_packages[0]}")
+rm -f -- "$package"
+(
+  CDPATH= cd -- "$canonical_dir"
+  TZ=UTC LC_ALL=C zip -X -q "$package" -@ < "$file_list"
+)

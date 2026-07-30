@@ -3,16 +3,21 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
 import textwrap
+import time
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "extension"
 SCRIPTS = EXTENSION / "scripts"
+MACHINE_HOME_PATTERN = re.compile(
+    r"(?:/(?:home|Users)/[^/\s]+/|/root/)"
+)
 
 
 class RepositoryTests(unittest.TestCase):
@@ -27,7 +32,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(metadata["shell-version"], ["50"])
 
     def test_runtime_is_machine_independent(self) -> None:
-        forbidden = ("/home/wenbo", "workspace@wenbo")
+        forbidden = ("workspace@wenbo",)
         runtime_files = [
             path
             for path in EXTENSION.rglob("*")
@@ -39,12 +44,24 @@ class RepositoryTests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             for value in forbidden:
                 self.assertNotIn(value, source, str(path.relative_to(ROOT)))
+            self.assertIsNone(
+                MACHINE_HOME_PATTERN.search(source),
+                str(path.relative_to(ROOT)),
+            )
 
         extension_source = (EXTENSION / "extension.js").read_text(
             encoding="utf-8"
         )
         self.assertIn("this.path", extension_source)
         self.assertIn("runtimeCommandArgv", extension_source)
+
+    def test_machine_home_pattern_rejects_common_user_paths(self) -> None:
+        for value in (
+            "/home/alice/.local/bin/helper",
+            "/Users/alice/Library/helper",
+            "/root/.local/bin/helper",
+        ):
+            self.assertIsNotNone(MACHINE_HOME_PATTERN.search(value), value)
 
     def test_runtime_scripts_are_executable(self) -> None:
         for name in ("multi-codex", "open-six-terminals"):
@@ -83,6 +100,8 @@ class RepositoryTests(unittest.TestCase):
                         / "multi-codex@wenbo.shell-extension.zip"
                     ).read_bytes()
                 )
+                if build == 1:
+                    time.sleep(1.1)
 
             self.assertEqual(packages[0], packages[1])
 
