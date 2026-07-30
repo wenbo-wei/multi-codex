@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+tool_dir=$(dirname -- "${BASH_SOURCE[0]}")
+forbidden_patterns=$tool_dir/forbidden-runtime-patterns
+
 if [ "$#" -ne 1 ]; then
   printf 'Usage: check-package.sh PACKAGE\n' >&2
   exit 2
@@ -55,9 +58,7 @@ for script in multi-codex open-six-terminals; do
   fi
 done
 
-if rg -n -uu \
-    '/(home|Users)/[^/ \t\r\n]+/|/root/|workspace@wenbo|codex-quota/' \
-    "$extract_dir"; then
+if rg -n -uu -f "$forbidden_patterns" "$extract_dir"; then
   printf 'Package contains a legacy path or unrelated source.\n' >&2
   exit 1
 fi

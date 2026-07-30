@@ -15,8 +15,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "extension"
 SCRIPTS = EXTENSION / "scripts"
-MACHINE_HOME_PATTERN = re.compile(
-    r"(?:/(?:home|Users)/[^/\s]+/|/root/)"
+FORBIDDEN_PATTERN_FILE = ROOT / "tools" / "forbidden-runtime-patterns"
+FORBIDDEN_RUNTIME_PATTERNS = tuple(
+    re.compile(line)
+    for line in FORBIDDEN_PATTERN_FILE.read_text(encoding="utf-8").splitlines()
+    if line
 )
 
 
@@ -32,7 +35,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(metadata["shell-version"], ["50"])
 
     def test_runtime_is_machine_independent(self) -> None:
-        forbidden = ("workspace@wenbo",)
         runtime_files = [
             path
             for path in EXTENSION.rglob("*")
@@ -42,12 +44,11 @@ class RepositoryTests(unittest.TestCase):
         self.assertGreaterEqual(len(runtime_files), 9)
         for path in runtime_files:
             source = path.read_text(encoding="utf-8")
-            for value in forbidden:
-                self.assertNotIn(value, source, str(path.relative_to(ROOT)))
-            self.assertIsNone(
-                MACHINE_HOME_PATTERN.search(source),
-                str(path.relative_to(ROOT)),
-            )
+            for pattern in FORBIDDEN_RUNTIME_PATTERNS:
+                self.assertIsNone(
+                    pattern.search(source),
+                    str(path.relative_to(ROOT)),
+                )
 
         extension_source = (EXTENSION / "extension.js").read_text(
             encoding="utf-8"
@@ -55,13 +56,74 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("this.path", extension_source)
         self.assertIn("runtimeCommandArgv", extension_source)
 
-    def test_machine_home_pattern_rejects_common_user_paths(self) -> None:
+    def test_forbidden_patterns_reject_machine_specific_paths(self) -> None:
         for value in (
             "/home/alice/.local/bin/helper",
             "/Users/alice/Library/helper",
             "/root/.local/bin/helper",
         ):
-            self.assertIsNotNone(MACHINE_HOME_PATTERN.search(value), value)
+            self.assertTrue(
+                any(
+                    pattern.search(value)
+                    for pattern in FORBIDDEN_RUNTIME_PATTERNS
+                ),
+                value,
+            )
+
+    def test_package_checker_rejects_a_machine_home_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary_root = Path(directory) / "repository"
+            temporary_tools = temporary_root / "tools"
+            temporary_tools.mkdir(parents=True)
+            shutil.copytree(EXTENSION, temporary_root / "extension")
+            for name in (
+                "check-package.sh",
+                "forbidden-runtime-patterns",
+                "package.sh",
+            ):
+                shutil.copy2(
+                    ROOT / "tools" / name,
+                    temporary_tools / name,
+                )
+            extension_source = temporary_root / "extension" / "extension.js"
+            extension_source.write_text(
+                extension_source.read_text(encoding="utf-8")
+                + "\n// /home/alice/.local/bin/machine-helper\n",
+                encoding="utf-8",
+            )
+            output = Path(directory) / "dist"
+            environment = os.environ.copy()
+            environment["SOURCE_DATE_EPOCH"] = "1785369600"
+            subprocess.run(
+                [str(temporary_tools / "package.sh"), str(output)],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+
+            result = subprocess.run(
+                [
+                    str(temporary_tools / "check-package.sh"),
+                    str(
+                        output
+                        / "multi-codex@wenbo.shell-extension.zip"
+                    ),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "legacy path or unrelated source",
+                result.stderr,
+            )
 
     def test_runtime_scripts_are_executable(self) -> None:
         for name in ("multi-codex", "open-six-terminals"):

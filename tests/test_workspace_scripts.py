@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -594,10 +595,17 @@ class WorkspaceScriptTests(unittest.TestCase):
                     r"(?m)^[ \t]*systemctl\b[^\n]*[*?]",
                 )
 
-    def test_panel_helper_probes_before_geometry(self) -> None:
+    def test_relocated_panel_helper_probes_before_geometry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            fakebin = Path(directory)
-            log = fakebin / "calls"
+            temporary_root = Path(directory)
+            fakebin = temporary_root / "bin"
+            fakebin.mkdir()
+            extension_copy = temporary_root / "extension copy with spaces"
+            shutil.copytree(ROOT / "extension", extension_copy)
+            relocated_helper = (
+                extension_copy / "scripts" / "open-six-terminals"
+            )
+            log = temporary_root / "calls"
             write_executable(
                 fakebin / "pgrep",
                 """\
@@ -652,16 +660,13 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "MULTI_CODEX_LAYOUT_CLI": str(
-                        ROOT / "extension" / "workspaceLayoutCli.mjs"
-                    ),
                     "MULTI_CODEX_LAYOUT_BOUNDED": "1",
                     "MULTI_CODEX_TEST_LOG": str(log),
                 }
             )
 
             result = subprocess.run(
-                [str(HELPER), "--panel"],
+                [str(relocated_helper), "--panel"],
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
