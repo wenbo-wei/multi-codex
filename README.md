@@ -10,6 +10,4 @@ workspace. It adds a **Workspace** button to the GNOME panel.
 - Arranges the terminals in a 3-by-2 grid without a centre-screen flash.
 - Recalls the complete set to the active workspace and focuses one terminal.
 - Fails closed on duplicate or ambiguous terminal identities.
-- Places its panel button beside the local Codex dashboard when available,
-  with the GNOME date menu as a fallback.
 - Opens terminal windows only; Codex sessions remain under the user's control.
