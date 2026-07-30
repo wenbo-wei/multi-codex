@@ -1,0 +1,7 @@
+{
+  "uuid": "workspace-placement-harness@wenbo",
+  "name": "Workspace Placement Harness",
+  "description": "Headless-only regression harness for Workspace pre-paint placement.",
+  "shell-version": ["50"],
+  "version": 1
+}

@@ -1,0 +1,435 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+usage() {
+  printf 'Usage: open-six-terminals [--check | --missing | --panel]\n'
+}
+
+check_only=false
+missing_only=false
+panel_mode=false
+case "$#" in
+  0)
+    ;;
+  1)
+    case "$1" in
+      --check)
+        check_only=true
+        ;;
+      --missing)
+        missing_only=true
+        ;;
+      --panel)
+        panel_mode=true
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
+
+readonly COMMAND_TIMEOUT_SECONDS=2
+layout_cli=${WORKSPACE_LAYOUT_CLI:-/home/wenbo/.local/share/gnome-shell/extensions/workspace@wenbo/workspaceLayoutCli.mjs}
+readonly SHADOW_PIXELS=25
+readonly LAYOUT_STATUS_MISSING=3
+readonly LAYOUT_STATUS_STARTING=4
+
+# The Workspace runner owns the activation deadline. Direct helper calls retain
+# the original per-command guard without nesting those timeout processes under
+# the runner's shared deadline.
+run_command() {
+  if [ "${WORKSPACE_LAYOUT_BOUNDED:-}" = 1 ]; then
+    "$@"
+  else
+    timeout \
+      --foreground \
+      --signal=TERM \
+      --kill-after=1s \
+      "${COMMAND_TIMEOUT_SECONDS}s" \
+      "$@"
+  fi
+}
+
+error_summary=
+record_error() {
+  if [ -z "$error_summary" ]; then
+    error_summary=$1
+  else
+    error_summary="$error_summary, $1"
+  fi
+}
+
+resolve_terminal_slot() {
+  local number=$1
+  local pid_output probe_status window_output window_id
+  local desktop_property desktop_value
+  local -a pids candidate_windows managed_windows
+
+  if pid_output=$(
+      run_command pgrep -f -- \
+        "^/usr/bin/ptyxis --standalone --title=Terminal $number$" \
+        2>/dev/null
+  ); then
+    mapfile -t pids <<< "$pid_output"
+  else
+    probe_status=$?
+    if [ "$probe_status" -ne 1 ]; then
+      printf 'error\tcould not inspect Terminal %s processes\n' "$number"
+      return
+    fi
+    pids=()
+  fi
+
+  case "${#pids[@]}" in
+    0)
+      printf 'missing\t%s\n' "$number"
+      return
+      ;;
+    1)
+      ;;
+    *)
+      printf 'error\tduplicate Terminal %s processes\n' "$number"
+      return
+      ;;
+  esac
+
+  candidate_windows=()
+  if window_output=$(
+      run_command xdotool search --pid "${pids[0]}" 2>/dev/null
+  ); then
+    if [ -n "$window_output" ]; then
+      mapfile -t candidate_windows <<< "$window_output"
+    fi
+  else
+    probe_status=$?
+    if [ "$probe_status" -ne 1 ]; then
+      printf 'error\tcould not inspect Terminal %s windows\n' "$number"
+      return
+    fi
+  fi
+
+  managed_windows=()
+  for window_id in "${candidate_windows[@]}"; do
+    if ! [[ "$window_id" =~ ^[0-9]+$ ]]; then
+      printf 'error\tcould not inspect Terminal %s windows\n' "$number"
+      return
+    fi
+    if ! desktop_property=$(
+        run_command xprop -id "$window_id" _NET_WM_DESKTOP 2>/dev/null
+    ); then
+      printf 'error\tcould not inspect Terminal %s windows\n' "$number"
+      return
+    fi
+    desktop_value=${desktop_property#"_NET_WM_DESKTOP(CARDINAL) = "}
+    if [ "$desktop_value" != "$desktop_property" ] &&
+        [[ "$desktop_value" =~ ^[0-9]+$ ]]; then
+      managed_windows+=("$window_id")
+    fi
+  done
+
+  case "${#managed_windows[@]}" in
+    0)
+      printf 'starting\t%s\n' "$number"
+      ;;
+    1)
+      printf 'ok\t%s\n' "${managed_windows[0]}"
+      ;;
+    *)
+      printf 'error\tduplicate windows for Terminal %s\n' "$number"
+      ;;
+  esac
+}
+
+# Identity is owned here: each populated slot has exactly one fixed-command
+# Ptyxis process and one Mutter-managed top-level window. A process without its
+# Mutter window is still starting, not missing or invalid. The 1x1
+# override-redirect Ptyxis client-leader window is ignored. Independent probes
+# are started together, then collected in slot order.
+declare -a resolver_fds terminal_windows missing_slots starting_slots
+resolver_fds=()
+terminal_windows=()
+missing_slots=()
+starting_slots=()
+for i in 1 2 3 4 5 6; do
+  exec {resolver_fd}< <(resolve_terminal_slot "$i")
+  resolver_fds[$i]=$resolver_fd
+  unset resolver_fd
+done
+
+for i in 1 2 3 4 5 6; do
+  resolver_fd=${resolver_fds[$i]}
+  result_type=
+  result_value=
+  if ! IFS=$'\t' read -r result_type result_value <&"$resolver_fd"; then
+    result_type=error
+    result_value="could not resolve Terminal $i"
+  fi
+  exec {resolver_fd}<&-
+  case "$result_type" in
+    ok)
+      terminal_windows[$i]=$result_value
+      ;;
+    missing)
+      missing_slots+=("$result_value")
+      ;;
+    starting)
+      starting_slots+=("$result_value")
+      ;;
+    error)
+      record_error "$result_value"
+      ;;
+    *)
+      record_error "could not resolve Terminal $i"
+      ;;
+  esac
+done
+
+if [ -n "$error_summary" ]; then
+  printf 'Workspace probe failed: %s; no windows were changed.\n' \
+    "$error_summary" >&2
+  exit 1
+fi
+
+if [ "${#starting_slots[@]}" -gt 0 ]; then
+  if [ "$check_only" = false ] &&
+      [ "$missing_only" = false ]; then
+    printf 'Workspace pending: %s terminal window(s) are still starting; no windows were changed.\n' \
+      "${#starting_slots[@]}" >&2
+  fi
+  exit "$LAYOUT_STATUS_STARTING"
+fi
+
+if [ "$missing_only" = true ]; then
+  if [ "${#missing_slots[@]}" -gt 0 ]; then
+    printf '%s\n' "${missing_slots[@]}"
+  fi
+  exit 0
+fi
+
+if [ "${#missing_slots[@]}" -gt 0 ]; then
+  if [ "$check_only" = true ]; then
+    exit "$LAYOUT_STATUS_MISSING"
+  fi
+  missing_summary=
+  for i in "${missing_slots[@]}"; do
+    if [ -z "$missing_summary" ]; then
+      missing_summary="missing Terminal $i"
+    else
+      missing_summary="$missing_summary, missing Terminal $i"
+    fi
+  done
+  printf 'Workspace incomplete: %s; no windows were changed.\n' \
+    "$missing_summary" >&2
+  exit 1
+fi
+
+if [ "$check_only" = true ]; then
+  exit 0
+fi
+
+parse_desktop_property() {
+  local property=$1
+  local value=${property#"_NET_CURRENT_DESKTOP(CARDINAL) = "}
+  if [ "$value" != "$property" ] && [[ "$value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  value=${property#"_NET_WM_DESKTOP(CARDINAL) = "}
+  if [ "$value" != "$property" ] && [[ "$value" =~ ^[0-9]+$ ]] &&
+      [ "$value" -ne 4294967295 ]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  return 1
+}
+
+resolve_workarea() {
+  local output value item active_window active_property i
+  local tuple_count tuple_index
+  local -a values
+
+  if ! output=$(
+      run_command xprop -root _NET_WORKAREA 2>/dev/null
+  ); then
+    return 1
+  fi
+  value=${output#*=}
+  if [ "$value" = "$output" ]; then
+    return 1
+  fi
+  value=${value//$'\n'/ }
+  value=${value//,/ }
+  read -r -a values <<< "$value"
+  if (( ${#values[@]} < 4 || ${#values[@]} % 4 != 0 )); then
+    return 1
+  fi
+  for item in "${values[@]}"; do
+    if ! [[ "$item" =~ ^-?[0-9]+$ ]]; then
+      return 1
+    fi
+  done
+
+  current_desktop=
+  if output=$(
+      run_command xprop -root _NET_CURRENT_DESKTOP 2>/dev/null
+  ); then
+    current_desktop=$(parse_desktop_property "$output" || true)
+  fi
+  if [ -z "$current_desktop" ]; then
+    if active_window=$(
+        run_command xdotool getactivewindow 2>/dev/null
+    ) && [[ "$active_window" =~ ^[0-9]+$ ]] &&
+        active_property=$(
+          run_command xprop -id "$active_window" _NET_WM_DESKTOP 2>/dev/null
+        ); then
+      current_desktop=$(parse_desktop_property "$active_property" || true)
+    fi
+  fi
+
+  tuple_count=$(("${#values[@]}" / 4))
+  if [ -n "$current_desktop" ]; then
+    if [ "$current_desktop" -ge "$tuple_count" ]; then
+      return 1
+    fi
+    tuple_index=$current_desktop
+  else
+    # Mutter can omit _NET_CURRENT_DESKTOP under Wayland. Using the first tuple
+    # is safe only when every workspace advertises the same work area.
+    tuple_index=0
+    for ((i = 1; i < tuple_count; i++)); do
+      if [ "${values[$((i * 4))]}" != "${values[0]}" ] ||
+          [ "${values[$((i * 4 + 1))]}" != "${values[1]}" ] ||
+          [ "${values[$((i * 4 + 2))]}" != "${values[2]}" ] ||
+          [ "${values[$((i * 4 + 3))]}" != "${values[3]}" ]; then
+        return 1
+      fi
+    done
+  fi
+
+  work_x=${values[$((tuple_index * 4))]}
+  work_y=${values[$((tuple_index * 4 + 1))]}
+  work_width=${values[$((tuple_index * 4 + 2))]}
+  work_height=${values[$((tuple_index * 4 + 3))]}
+  [ "$work_width" -ge 3 ] && [ "$work_height" -ge 2 ]
+}
+
+# Resolve and validate all geometry before performing the first window change.
+if ! resolve_workarea; then
+  printf 'Workspace could not resolve the current work area; no windows were changed.\n' >&2
+  exit 1
+fi
+
+# The pure layout module owns the visible 3x2 grid. This X11 adapter adds
+# Ptyxis' 25 px transparent shadow to each canonical visible frame.
+layout_output=
+if ! layout_output=$(
+    run_command /usr/bin/gjs \
+      -m \
+      "$layout_cli" \
+      "$work_x" \
+      "$work_y" \
+      "$work_width" \
+      "$work_height" 2>/dev/null
+); then
+  printf 'Workspace could not calculate a valid terminal grid; no windows were changed.\n' >&2
+  exit 1
+fi
+
+layout_rows=
+layout_count=0
+while read -r number frame_x frame_y frame_width frame_height extra; do
+  layout_count=$((layout_count + 1))
+  if [ -n "$extra" ] ||
+      ! [[ "$number" =~ ^[1-6]$ ]] ||
+      [ "$number" -ne "$layout_count" ] ||
+      ! [[ "$frame_x" =~ ^-?[0-9]+$ ]] ||
+      ! [[ "$frame_y" =~ ^-?[0-9]+$ ]] ||
+      ! [[ "$frame_width" =~ ^[0-9]+$ ]] ||
+      ! [[ "$frame_height" =~ ^[0-9]+$ ]] ||
+      [ "$frame_width" -lt 1 ] ||
+      [ "$frame_height" -lt 1 ]; then
+    printf 'Workspace received an invalid terminal grid; no windows were changed.\n' >&2
+    exit 1
+  fi
+
+  x=$((frame_x - SHADOW_PIXELS))
+  y=$((frame_y - SHADOW_PIXELS))
+  width=$((frame_width + 2 * SHADOW_PIXELS))
+  height=$((frame_height + 2 * SHADOW_PIXELS))
+  if [ -n "$layout_rows" ]; then
+    layout_rows+=$'\n'
+  fi
+  layout_rows+="$number $x $y $width $height"
+done <<< "$layout_output"
+
+if [ "$layout_count" -ne 6 ]; then
+  printf 'Workspace received an incomplete terminal grid; no windows were changed.\n' >&2
+  exit 1
+fi
+
+# Direct command use recovers minimized windows on the caller's workspace.
+# Panel mode delegates workspace, visibility, stacking, and focus to GNOME
+# Shell, and performs geometry changes only.
+target_desktop=
+if [ "$panel_mode" = false ]; then
+  if [ -z "$current_desktop" ]; then
+    printf 'Workspace could not resolve the current desktop; no windows were changed.\n' >&2
+    exit 1
+  fi
+  target_desktop=$current_desktop
+fi
+
+status=0
+first_window_id=
+while read -r number x y width height; do
+  window_id=${terminal_windows[$number]}
+  if [ -n "$target_desktop" ]; then
+    if ! run_command xdotool set_desktop_for_window \
+        "$window_id" "$target_desktop" 2>/dev/null; then
+      status=1
+    fi
+  fi
+  if [ "$panel_mode" = false ]; then
+    if ! run_command xdotool windowmap --sync \
+        "$window_id" 2>/dev/null; then
+      status=1
+    fi
+  fi
+  if ! run_command xdotool windowsize --sync \
+      "$window_id" "$width" "$height" 2>/dev/null; then
+    status=1
+  fi
+  if ! run_command xdotool windowmove --sync \
+      "$window_id" "$x" "$y" 2>/dev/null; then
+    status=1
+  fi
+  if [ "$panel_mode" = false ]; then
+    if ! run_command xdotool windowraise "$window_id" 2>/dev/null; then
+      status=1
+    fi
+    # Mutter clears its minimized state when the client is activated. Mapping
+    # alone can leave _NET_WM_STATE_HIDDEN set even though X reports Viewable.
+    if ! run_command xdotool windowactivate "$window_id" 2>/dev/null; then
+      status=1
+    fi
+    if [ -z "$first_window_id" ]; then
+      first_window_id=$window_id
+    fi
+  fi
+done <<< "$layout_rows"
+
+if [ -n "$first_window_id" ]; then
+  if ! run_command xdotool windowactivate \
+      "$first_window_id" 2>/dev/null; then
+    status=1
+  fi
+fi
+
+exit "$status"
