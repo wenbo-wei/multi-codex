@@ -2,17 +2,31 @@
 
 set -euo pipefail
 
-task_root=/home/wenbo/codex/workspace-placement-review
-runtime_dir=$(mktemp -d /tmp/workspace-smoke-runtime.XXXXXX)
-data_dir=$(mktemp -d /tmp/workspace-smoke-data.XXXXXX)
-config_dir=$(mktemp -d /tmp/workspace-smoke-config.XXXXXX)
-cache_dir=$(mktemp -d /tmp/workspace-smoke-cache.XXXXXX)
-log_file=$(mktemp /tmp/workspace-smoke-log.XXXXXX)
+task_root=$(
+  CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
+    pwd -P
+)
+metadata=$task_root/extension/metadata.json
+uuid=$(
+  python3 -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' \
+    "$metadata"
+)
+version=$(
+  python3 -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["version"])' \
+    "$metadata"
+)
+runtime_dir=$(mktemp -d /tmp/multi-codex-smoke-runtime.XXXXXX)
+data_dir=$(mktemp -d /tmp/multi-codex-smoke-data.XXXXXX)
+config_dir=$(mktemp -d /tmp/multi-codex-smoke-config.XXXXXX)
+cache_dir=$(mktemp -d /tmp/multi-codex-smoke-cache.XXXXXX)
+log_file=$(mktemp /tmp/multi-codex-smoke-log.XXXXXX)
 chmod 700 "$runtime_dir" "$data_dir" "$config_dir" "$cache_dir"
 mkdir -p "$data_dir/gnome-shell/extensions"
 ln -s \
-  "$task_root/extensions/workspace@wenbo" \
-  "$data_dir/gnome-shell/extensions/workspace@wenbo"
+  "$task_root/extension" \
+  "$data_dir/gnome-shell/extensions/$uuid"
 
 cleanup() {
   rm -rf -- "$runtime_dir" "$data_dir" "$config_dir" "$cache_dir"
@@ -30,17 +44,18 @@ timeout \
     XDG_CONFIG_HOME="$config_dir" \
     XDG_CACHE_HOME="$cache_dir" \
     GIO_USE_VFS=local \
+    MULTI_CODEX_SMOKE_UUID="$uuid" \
   dbus-run-session -- bash -c '
     gsettings set org.gnome.shell disable-user-extensions false
     gsettings set org.gnome.shell enabled-extensions \
-      "[\"workspace@wenbo\"]"
+      "[\"$MULTI_CODEX_SMOKE_UUID\"]"
     gnome-shell \
       --headless \
       --virtual-monitor=1280x720 \
       --wayland-display=workspace-production-smoke &
     shell_pid=$!
     sleep 3
-    gnome-extensions info workspace@wenbo
+    gnome-extensions info "$MULTI_CODEX_SMOKE_UUID"
     info_status=$?
     kill -TERM "$shell_pid"
     wait "$shell_pid" 2>/dev/null || true
@@ -49,19 +64,19 @@ timeout \
 
 info=$(
   sed -n \
-    '/^workspace@wenbo$/,/^  State:/p' \
+    "/^${uuid}$/,/^  State:/p" \
     "$log_file"
 )
 printf '%s\n' "$info"
-if [[ "$info" != *'Version: 9'* ]] ||
+if [[ "$info" != *"Version: $version"* ]] ||
     [[ "$info" != *'State: ACTIVE'* ]]; then
   exit 1
 fi
 if rg -q \
-    'Extension workspace@wenbo.*(ImportError|JS ERROR|CRITICAL)' \
+    "Extension ${uuid}.*(ImportError|JS ERROR|CRITICAL)" \
     "$log_file"; then
   rg -n \
-    'Extension workspace@wenbo.*(ImportError|JS ERROR|CRITICAL)' \
+    "Extension ${uuid}.*(ImportError|JS ERROR|CRITICAL)" \
     "$log_file" >&2
   exit 1
 fi

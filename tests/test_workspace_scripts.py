@@ -9,8 +9,9 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "workspace" / "open-six-terminals"
-RUNNER = ROOT / "workspace" / "workspace"
+RUNTIME = ROOT / "extension" / "scripts"
+HELPER = RUNTIME / "open-six-terminals"
+RUNNER = RUNTIME / "multi-codex"
 
 
 def write_executable(path: Path, contents: str) -> None:
@@ -61,7 +62,7 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_BOUNDED": "1",
+                    "MULTI_CODEX_LAYOUT_BOUNDED": "1",
                 }
             )
 
@@ -103,7 +104,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "xdotool",
                 """\
                 #!/usr/bin/env bash
-                printf 'xdotool:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'xdotool:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 if [ "$1" = search ] && [ "$2" = --pid ]; then
                   exit 1
                 fi
@@ -114,7 +115,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "xprop",
                 """\
                 #!/usr/bin/env bash
-                printf 'xprop:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'xprop:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 exit 2
                 """,
             )
@@ -122,8 +123,8 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_BOUNDED": "1",
-                    "WORKSPACE_TEST_LOG": str(log),
+                    "MULTI_CODEX_LAYOUT_BOUNDED": "1",
+                    "MULTI_CODEX_TEST_LOG": str(log),
                 }
             )
 
@@ -175,7 +176,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "xdotool",
                 """\
                 #!/usr/bin/env bash
-                printf 'xdotool:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'xdotool:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 if [ "$1" = search ] && [ "$2" = --pid ]; then
                   printf '%s2\n' "$3"
                   exit 0
@@ -198,8 +199,8 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_BOUNDED": "1",
-                    "WORKSPACE_TEST_LOG": str(log),
+                    "MULTI_CODEX_LAYOUT_BOUNDED": "1",
+                    "MULTI_CODEX_TEST_LOG": str(log),
                 }
             )
 
@@ -237,7 +238,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 helper,
                 """\
                 #!/usr/bin/env bash
-                printf 'layout:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'layout:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 if [ "$1" != --missing ]; then
                   exit 2
                 fi
@@ -254,10 +255,10 @@ class WorkspaceScriptTests(unittest.TestCase):
                     --unit=*) unit=${argument#--unit=} ;;
                   esac
                 done
-                printf 'start:%s\n' "$unit" >> "$WORKSPACE_TEST_LOG"
+                printf 'start:%s\n' "$unit" >> "$MULTI_CODEX_TEST_LOG"
                 case "$unit" in
-                  workspace-terminal-2|workspace-terminal-4) exit 0 ;;
-                  workspace-terminal-5) exit 1 ;;
+                  multi-codex-terminal-2|multi-codex-terminal-4) exit 0 ;;
+                  multi-codex-terminal-5) exit 1 ;;
                   *) exit 2 ;;
                 esac
                 """,
@@ -266,17 +267,17 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "systemctl",
                 """\
                 #!/usr/bin/env bash
-                printf 'stop' >> "$WORKSPACE_TEST_LOG"
-                printf '\\t%s' "$@" >> "$WORKSPACE_TEST_LOG"
-                printf '\n' >> "$WORKSPACE_TEST_LOG"
+                printf 'stop' >> "$MULTI_CODEX_TEST_LOG"
+                printf '\\t%s' "$@" >> "$MULTI_CODEX_TEST_LOG"
+                printf '\n' >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             environment = os.environ.copy()
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_COMMAND": str(helper),
-                    "WORKSPACE_TEST_LOG": str(log),
+                    "MULTI_CODEX_LAYOUT_COMMAND": str(helper),
+                    "MULTI_CODEX_TEST_LOG": str(log),
                 }
             )
 
@@ -300,13 +301,13 @@ class WorkspaceScriptTests(unittest.TestCase):
                 log.read_text(encoding="utf-8").splitlines(),
                 [
                     "layout:--missing",
-                    "start:workspace-terminal-2",
-                    "start:workspace-terminal-4",
-                    "start:workspace-terminal-5",
+                    "start:multi-codex-terminal-2",
+                    "start:multi-codex-terminal-4",
+                    "start:multi-codex-terminal-5",
                     (
                         "stop\t--user\tstop"
-                        "\tworkspace-terminal-2.service"
-                        "\tworkspace-terminal-4.service"
+                        "\tmulti-codex-terminal-2.service"
+                        "\tmulti-codex-terminal-4.service"
                     ),
                 ],
             )
@@ -324,12 +325,12 @@ class WorkspaceScriptTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env bash
                 count=0
-                if [ -f "$WORKSPACE_TEST_STATE" ]; then
-                  read -r count < "$WORKSPACE_TEST_STATE"
+                if [ -f "$MULTI_CODEX_TEST_STATE" ]; then
+                  read -r count < "$MULTI_CODEX_TEST_STATE"
                 fi
                 count=$((count + 1))
-                printf '%s\n' "$count" > "$WORKSPACE_TEST_STATE"
-                printf 'layout:%s:%s\n' "$count" "$*" >> "$WORKSPACE_TEST_LOG"
+                printf '%s\n' "$count" > "$MULTI_CODEX_TEST_STATE"
+                printf 'layout:%s:%s\n' "$count" "$*" >> "$MULTI_CODEX_TEST_LOG"
                 case "$count" in
                   1)
                     [ "$1" = --missing ] || exit 2
@@ -363,23 +364,23 @@ class WorkspaceScriptTests(unittest.TestCase):
                     --unit=*) unit=${argument#--unit=} ;;
                   esac
                 done
-                printf 'start:%s\n' "$unit" >> "$WORKSPACE_TEST_LOG"
+                printf 'start:%s\n' "$unit" >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             write_executable(
                 fakebin / "systemctl",
                 """\
                 #!/usr/bin/env bash
-                printf 'stop:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'stop:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             environment = os.environ.copy()
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_COMMAND": str(helper),
-                    "WORKSPACE_TEST_LOG": str(log),
-                    "WORKSPACE_TEST_STATE": str(state),
+                    "MULTI_CODEX_LAYOUT_COMMAND": str(helper),
+                    "MULTI_CODEX_TEST_LOG": str(log),
+                    "MULTI_CODEX_TEST_STATE": str(state),
                 }
             )
 
@@ -399,12 +400,12 @@ class WorkspaceScriptTests(unittest.TestCase):
                 log.read_text(encoding="utf-8").splitlines(),
                 [
                     "layout:1:--missing",
-                    "start:workspace-terminal-1",
-                    "start:workspace-terminal-2",
-                    "start:workspace-terminal-3",
-                    "start:workspace-terminal-4",
-                    "start:workspace-terminal-5",
-                    "start:workspace-terminal-6",
+                    "start:multi-codex-terminal-1",
+                    "start:multi-codex-terminal-2",
+                    "start:multi-codex-terminal-3",
+                    "start:multi-codex-terminal-4",
+                    "start:multi-codex-terminal-5",
+                    "start:multi-codex-terminal-6",
                     "layout:2:--check",
                     "layout:3:--check",
                     "layout:4:--panel",
@@ -426,12 +427,12 @@ class WorkspaceScriptTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env bash
                 count=0
-                if [ -f "$WORKSPACE_TEST_STATE" ]; then
-                  read -r count < "$WORKSPACE_TEST_STATE"
+                if [ -f "$MULTI_CODEX_TEST_STATE" ]; then
+                  read -r count < "$MULTI_CODEX_TEST_STATE"
                 fi
                 count=$((count + 1))
-                printf '%s\n' "$count" > "$WORKSPACE_TEST_STATE"
-                printf 'layout:%s:%s\n' "$count" "$*" >> "$WORKSPACE_TEST_LOG"
+                printf '%s\n' "$count" > "$MULTI_CODEX_TEST_STATE"
+                printf 'layout:%s:%s\n' "$count" "$*" >> "$MULTI_CODEX_TEST_LOG"
                 case "$count" in
                   1)
                     [ "$1" = --missing ] || exit 2
@@ -443,7 +444,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                     exit 1
                     ;;
                   *)
-                    printf 'unexpected retry\n' >> "$WORKSPACE_TEST_LOG"
+                    printf 'unexpected retry\n' >> "$MULTI_CODEX_TEST_LOG"
                     exit 99
                     ;;
                 esac
@@ -453,23 +454,23 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "systemd-run",
                 """\
                 #!/usr/bin/env bash
-                printf 'start\n' >> "$WORKSPACE_TEST_LOG"
+                printf 'start\n' >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             write_executable(
                 fakebin / "systemctl",
                 """\
                 #!/usr/bin/env bash
-                printf 'stop:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'stop:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             environment = os.environ.copy()
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_COMMAND": str(helper),
-                    "WORKSPACE_TEST_LOG": str(log),
-                    "WORKSPACE_TEST_STATE": str(state),
+                    "MULTI_CODEX_LAYOUT_COMMAND": str(helper),
+                    "MULTI_CODEX_TEST_LOG": str(log),
+                    "MULTI_CODEX_TEST_STATE": str(state),
                 }
             )
 
@@ -496,7 +497,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                     "layout:2:--check",
                     (
                         "stop:--user stop "
-                        "workspace-terminal-2.service"
+                        "multi-codex-terminal-2.service"
                     ),
                 ],
             )
@@ -513,21 +514,21 @@ class WorkspaceScriptTests(unittest.TestCase):
                 helper,
                 """\
                 #!/usr/bin/env bash
-                printf 'layout:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'layout:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 case "$1" in
                   --missing)
                     printf '1\n'
                     exit 0
                     ;;
                   --check)
-                    if [ ! -e "$WORKSPACE_TEST_STATE" ]; then
-                      : > "$WORKSPACE_TEST_STATE"
+                    if [ ! -e "$MULTI_CODEX_TEST_STATE" ]; then
+                      : > "$MULTI_CODEX_TEST_STATE"
                       exit 1
                     fi
                     exit 0
                     ;;
                   *)
-                    printf 'unexpected layout\n' >> "$WORKSPACE_TEST_LOG"
+                    printf 'unexpected layout\n' >> "$MULTI_CODEX_TEST_LOG"
                     exit 99
                     ;;
                 esac
@@ -537,23 +538,23 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "systemd-run",
                 """\
                 #!/usr/bin/env bash
-                printf 'start\n' >> "$WORKSPACE_TEST_LOG"
+                printf 'start\n' >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             write_executable(
                 fakebin / "systemctl",
                 """\
                 #!/usr/bin/env bash
-                printf 'stop:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'stop:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 """,
             )
             environment = os.environ.copy()
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_COMMAND": str(helper),
-                    "WORKSPACE_TEST_LOG": str(log),
-                    "WORKSPACE_TEST_STATE": str(check_state),
+                    "MULTI_CODEX_LAYOUT_COMMAND": str(helper),
+                    "MULTI_CODEX_TEST_LOG": str(log),
+                    "MULTI_CODEX_TEST_STATE": str(check_state),
                 }
             )
 
@@ -576,7 +577,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                     "layout:--check",
                     (
                         "stop:--user stop "
-                        "workspace-terminal-1.service"
+                        "multi-codex-terminal-1.service"
                     ),
                 ],
             )
@@ -604,7 +605,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 slot=${!#}
                 slot=${slot%$}
                 slot=${slot##*Terminal }
-                printf 'pgrep:%s\n' "$slot" >> "$WORKSPACE_TEST_LOG"
+                printf 'pgrep:%s\n' "$slot" >> "$MULTI_CODEX_TEST_LOG"
                 printf '10%s\n' "$slot"
                 """,
             )
@@ -612,7 +613,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "xdotool",
                 """\
                 #!/usr/bin/env bash
-                printf 'xdotool:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'xdotool:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 case "$1" in
                   search)
                     printf '%s1\n%s2\n' "$3" "$3"
@@ -629,7 +630,7 @@ class WorkspaceScriptTests(unittest.TestCase):
                 fakebin / "xprop",
                 """\
                 #!/usr/bin/env bash
-                printf 'xprop:%s\n' "$*" >> "$WORKSPACE_TEST_LOG"
+                printf 'xprop:%s\n' "$*" >> "$MULTI_CODEX_TEST_LOG"
                 if [ "$1" = -root ] &&
                     [ "$2" = _NET_WORKAREA ]; then
                   printf '_NET_WORKAREA(CARDINAL) = 0, 44, 3440, 1325\n'
@@ -651,14 +652,11 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_CLI": str(
-                        ROOT
-                        / "extensions"
-                        / "workspace@wenbo"
-                        / "workspaceLayoutCli.mjs"
+                    "MULTI_CODEX_LAYOUT_CLI": str(
+                        ROOT / "extension" / "workspaceLayoutCli.mjs"
                     ),
-                    "WORKSPACE_LAYOUT_BOUNDED": "1",
-                    "WORKSPACE_TEST_LOG": str(log),
+                    "MULTI_CODEX_LAYOUT_BOUNDED": "1",
+                    "MULTI_CODEX_TEST_LOG": str(log),
                 }
             )
 
@@ -746,7 +744,7 @@ class WorkspaceScriptTests(unittest.TestCase):
             environment.update(
                 {
                     "PATH": f"{fakebin}:/usr/bin:/bin",
-                    "WORKSPACE_LAYOUT_BOUNDED": "1",
+                    "MULTI_CODEX_LAYOUT_BOUNDED": "1",
                 }
             )
 
@@ -770,7 +768,7 @@ class WorkspaceScriptTests(unittest.TestCase):
             1,
         )
         self.assertNotIn("run_layout_before_deadline()", source)
-        self.assertIn("env WORKSPACE_LAYOUT_BOUNDED=1", source)
+        self.assertIn("env MULTI_CODEX_LAYOUT_BOUNDED=1", source)
 
 
 if __name__ == "__main__":

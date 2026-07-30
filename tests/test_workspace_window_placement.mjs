@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
     prepareTerminalWindow,
     reassertTerminalWindow,
-} from '../extensions/workspace@wenbo/workspaceWindowPlacement.mjs';
+} from '../extension/workspaceWindowPlacement.mjs';
 
 
 function fakeWindow(events) {

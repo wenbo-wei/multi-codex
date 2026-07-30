@@ -7,7 +7,7 @@ import {
     SLOT_COUNT,
     workspaceFrameForSlot,
     workspaceFrames,
-} from '../extensions/workspace@wenbo/workspaceLayout.mjs';
+} from '../extension/workspaceLayout.mjs';
 
 
 test('current work area reproduces the six canonical visible frames', () => {
@@ -64,7 +64,7 @@ test('invalid work areas fail before a frame can be used', () => {
 
 test('the GJS adapter emits the same canonical frames', () => {
     const cli = fileURLToPath(new URL(
-        '../extensions/workspace@wenbo/workspaceLayoutCli.mjs',
+        '../extension/workspaceLayoutCli.mjs',
         import.meta.url
     ));
     const result = spawnSync(

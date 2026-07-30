@@ -1,4 +1,4 @@
-// Workspace panel extension.
+// Multi Codex panel extension.
 import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -20,27 +20,27 @@ import {
 } from './workspaceWindowSet.mjs';
 
 
-const WORKSPACE_COMMAND = '/home/wenbo/.local/bin/workspace';
+const COMMAND_FILENAME = 'multi-codex';
 const CODEX_DASHBOARD_ROLE = 'codex-quota-centre@local';
 const CODEX_SOURCE_INDICATOR_ID = 'codex-quota';
-const WORKSPACE_TIMEOUT_MS = 30000;
-const WORKSPACE_TERMINATE_GRACE_MS = 8000;
+const COMMAND_TIMEOUT_MS = 30000;
+const COMMAND_TERMINATE_GRACE_MS = 8000;
 
 
-const WorkspacePanelButton = GObject.registerClass(
-class WorkspacePanelButton extends PanelMenu.Button {
+const MultiCodexPanelButton = GObject.registerClass(
+class MultiCodexPanelButton extends PanelMenu.Button {
     _init(activate) {
-        super._init(0.5, 'Show Codex workspace', true);
+        super._init(0.5, 'Show Multi Codex workspace', true);
         this.accessible_role = Atk.Role.PUSH_BUTTON;
         this._activate = activate;
-        this.add_style_class_name('workspace-button');
+        this.add_style_class_name('multi-codex-button');
         this.add_child(new St.Label({
-            text: 'Workspace',
+            text: 'Multi Codex',
             y_align: Clutter.ActorAlign.CENTER,
         }));
 
         // GNOME Shell 50 uses a click gesture for panel buttons. Replace the
-        // disabled dummy-menu gesture with the Workspace action.
+        // disabled dummy-menu gesture with the Multi Codex action.
         this.remove_action(this._clickGesture);
         this._clickGesture = new Clutter.ClickGesture();
         this._clickGesture.set_recognize_on_press(true);
@@ -62,9 +62,14 @@ class WorkspacePanelButton extends PanelMenu.Button {
 });
 
 
-export default class WorkspaceExtension extends Extension {
+export default class MultiCodexExtension extends Extension {
     enable() {
         this._enabled = true;
+        this._commandPath = GLib.build_filenamev([
+            this.path,
+            'scripts',
+            COMMAND_FILENAME,
+        ]);
         this._placing = false;
         this._placeSource = 0;
         this._button = null;
@@ -111,7 +116,7 @@ export default class WorkspaceExtension extends Extension {
                 terminalProcess.send_signal(15);
             } catch (error) {
                 this._warn(
-                    'Could not stop the pending Workspace command',
+                    'Could not stop the pending Multi Codex command',
                     error
                 );
             }
@@ -136,6 +141,7 @@ export default class WorkspaceExtension extends Extension {
         }
         this._destroyButton();
         this._placing = false;
+        this._commandPath = null;
     }
 
     _panelBox(property) {
@@ -168,7 +174,7 @@ export default class WorkspaceExtension extends Extension {
         }
 
         // Prefer the dashboard registered by its GNOME status-area role.
-        // Falling back to the date menu while it exists would make Workspace
+        // Falling back to the date menu while it exists would make Multi Codex
         // and the dashboard continually compete for the same panel position.
         const dashboardContainer =
             statusArea[CODEX_DASHBOARD_ROLE]?.container;
@@ -303,7 +309,7 @@ export default class WorkspaceExtension extends Extension {
                         this._placeButton();
                     } catch (error) {
                         this._warn(
-                            'Could not place the Workspace button',
+                            'Could not place the Multi Codex button',
                             error
                         );
                     } finally {
@@ -314,7 +320,7 @@ export default class WorkspaceExtension extends Extension {
             );
         } catch (error) {
             this._placeSource = 0;
-            this._warn('Could not schedule Workspace placement', error);
+            this._warn('Could not schedule Multi Codex placement', error);
         }
     }
 
@@ -338,7 +344,7 @@ export default class WorkspaceExtension extends Extension {
         if (this._button)
             return;
 
-        const button = new WorkspacePanelButton(
+        const button = new MultiCodexPanelButton(
             () => this._openTerminalLayout()
         );
         this._button = button;
@@ -392,7 +398,7 @@ export default class WorkspaceExtension extends Extension {
         try {
             button.destroy();
         } catch (error) {
-            this._warn('Could not destroy the Workspace button', error);
+            this._warn('Could not destroy the Multi Codex button', error);
         }
     }
 
@@ -574,7 +580,7 @@ export default class WorkspaceExtension extends Extension {
         try {
             this._terminalTimeoutSource = GLib.timeout_add(
                 GLib.PRIORITY_DEFAULT,
-                WORKSPACE_TIMEOUT_MS,
+                COMMAND_TIMEOUT_MS,
                 () => {
                     this._terminalTimeoutSource = 0;
                     if (this._terminalProcess !== process ||
@@ -585,21 +591,21 @@ export default class WorkspaceExtension extends Extension {
                     this._holdNewTerminalWindows = false;
                     this._releasePreparedTerminalWindows();
                     Main.notify(
-                        'Workspace',
+                        'Multi Codex',
                         'Opening the six-terminal workspace timed out.'
                     );
                     try {
                         process.send_signal(15);
                     } catch (error) {
                         this._warn(
-                            'Could not stop the timed-out Workspace command',
+                            'Could not stop the timed-out Multi Codex command',
                             error
                         );
                     }
 
                     this._terminalKillSource = GLib.timeout_add(
                         GLib.PRIORITY_DEFAULT,
-                        WORKSPACE_TERMINATE_GRACE_MS,
+                        COMMAND_TERMINATE_GRACE_MS,
                         () => {
                             this._terminalKillSource = 0;
                             if (this._terminalProcess !== process ||
@@ -609,7 +615,7 @@ export default class WorkspaceExtension extends Extension {
                                 process.force_exit();
                             } catch (error) {
                                 this._warn(
-                                    'Could not force-stop the Workspace command',
+                                    'Could not force-stop the Multi Codex command',
                                     error
                                 );
                             }
@@ -626,7 +632,7 @@ export default class WorkspaceExtension extends Extension {
             );
             return true;
         } catch (error) {
-            this._warn('Could not arm the Workspace command timeout', error);
+            this._warn('Could not arm the Multi Codex command timeout', error);
             return false;
         }
     }
@@ -635,21 +641,25 @@ export default class WorkspaceExtension extends Extension {
         if (!this._enabled || this._terminalProcess)
             return;
 
+        const commandPath = this._commandPath;
+        if (!commandPath)
+            return;
+
         const generation = this._runGeneration;
         this._holdNewTerminalWindows = true;
         let process;
         try {
             process = Gio.Subprocess.new(
-                [WORKSPACE_COMMAND, '--panel'],
+                [commandPath, '--panel'],
                 Gio.SubprocessFlags.STDOUT_SILENCE |
                     Gio.SubprocessFlags.STDERR_SILENCE
             );
         } catch (error) {
             this._holdNewTerminalWindows = false;
             this._releasePreparedTerminalWindows();
-            this._warn('Could not start the Workspace command', error);
+            this._warn('Could not start the Multi Codex command', error);
             Main.notify(
-                'Workspace',
+                'Multi Codex',
                 'Could not open the six-terminal workspace.'
             );
             return;
@@ -664,7 +674,7 @@ export default class WorkspaceExtension extends Extension {
             try {
                 process.send_signal(15);
             } catch (error) {
-                this._warn('Could not stop the Workspace command', error);
+                this._warn('Could not stop the Multi Codex command', error);
             }
         }
         process.wait_async(null, (subprocess, result) => {
@@ -673,7 +683,7 @@ export default class WorkspaceExtension extends Extension {
                 successful = subprocess.wait_finish(result) &&
                     subprocess.get_successful();
             } catch (error) {
-                this._warn('Workspace command failed', error);
+                this._warn('Multi Codex command failed', error);
             }
             const isCurrent =
                 this._terminalProcess === subprocess &&
@@ -694,7 +704,7 @@ export default class WorkspaceExtension extends Extension {
             if (successful) {
                 if (!this._showTerminalWindows()) {
                     Main.notify(
-                        'Workspace',
+                        'Multi Codex',
                         'The six-terminal workspace did not become available.'
                     );
                     this._releasePreparedTerminalWindows();
@@ -703,7 +713,7 @@ export default class WorkspaceExtension extends Extension {
                 }
             } else {
                 Main.notify(
-                    'Workspace',
+                    'Multi Codex',
                     'The workspace is incomplete or could not be opened.'
                 );
                 this._releasePreparedTerminalWindows();
@@ -870,7 +880,7 @@ export default class WorkspaceExtension extends Extension {
             container.remove_child(actor);
             return true;
         } catch (error) {
-            this._warn('Could not remove the Workspace button', error);
+            this._warn('Could not remove the Multi Codex button', error);
             return false;
         }
     }
@@ -882,7 +892,7 @@ export default class WorkspaceExtension extends Extension {
             container.insert_child_at_index(actor, index);
             return true;
         } catch (error) {
-            this._warn('Could not insert the Workspace button', error);
+            this._warn('Could not insert the Multi Codex button', error);
             return false;
         }
     }

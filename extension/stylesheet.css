@@ -1,5 +1,5 @@
 /* Match the visible horizontal padding of GNOME's native date pill. */
-#panel .workspace-button {
+#panel .multi-codex-button {
   -natural-hpadding: 0.818em;
   -minimum-hpadding: 0.818em;
 }

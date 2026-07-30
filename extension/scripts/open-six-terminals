@@ -36,16 +36,24 @@ case "$#" in
 esac
 
 readonly COMMAND_TIMEOUT_SECONDS=2
-layout_cli=${WORKSPACE_LAYOUT_CLI:-/home/wenbo/.local/share/gnome-shell/extensions/workspace@wenbo/workspaceLayoutCli.mjs}
+if ! script_dir=$(
+    CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
+      pwd -P
+); then
+  printf 'Multi Codex could not resolve its runtime directory.\n' >&2
+  exit 1
+fi
+extension_dir=$script_dir/..
+layout_cli=${MULTI_CODEX_LAYOUT_CLI:-"$extension_dir/workspaceLayoutCli.mjs"}
 readonly SHADOW_PIXELS=25
 readonly LAYOUT_STATUS_MISSING=3
 readonly LAYOUT_STATUS_STARTING=4
 
-# The Workspace runner owns the activation deadline. Direct helper calls retain
-# the original per-command guard without nesting those timeout processes under
-# the runner's shared deadline.
+# The Multi Codex runner owns the activation deadline. Direct helper calls
+# retain the original per-command guard without nesting timeout processes
+# under the runner's shared deadline.
 run_command() {
-  if [ "${WORKSPACE_LAYOUT_BOUNDED:-}" = 1 ]; then
+  if [ "${MULTI_CODEX_LAYOUT_BOUNDED:-}" = 1 ]; then
     "$@"
   else
     timeout \
@@ -192,7 +200,7 @@ for i in 1 2 3 4 5 6; do
 done
 
 if [ -n "$error_summary" ]; then
-  printf 'Workspace probe failed: %s; no windows were changed.\n' \
+  printf 'Multi Codex probe failed: %s; no windows were changed.\n' \
     "$error_summary" >&2
   exit 1
 fi
@@ -200,7 +208,7 @@ fi
 if [ "${#starting_slots[@]}" -gt 0 ]; then
   if [ "$check_only" = false ] &&
       [ "$missing_only" = false ]; then
-    printf 'Workspace pending: %s terminal window(s) are still starting; no windows were changed.\n' \
+    printf 'Multi Codex pending: %s terminal window(s) are still starting; no windows were changed.\n' \
       "${#starting_slots[@]}" >&2
   fi
   exit "$LAYOUT_STATUS_STARTING"
@@ -225,7 +233,7 @@ if [ "${#missing_slots[@]}" -gt 0 ]; then
       missing_summary="$missing_summary, missing Terminal $i"
     fi
   done
-  printf 'Workspace incomplete: %s; no windows were changed.\n' \
+  printf 'Multi Codex incomplete: %s; no windows were changed.\n' \
     "$missing_summary" >&2
   exit 1
 fi
@@ -322,7 +330,7 @@ resolve_workarea() {
 
 # Resolve and validate all geometry before performing the first window change.
 if ! resolve_workarea; then
-  printf 'Workspace could not resolve the current work area; no windows were changed.\n' >&2
+  printf 'Multi Codex could not resolve the current work area; no windows were changed.\n' >&2
   exit 1
 fi
 
@@ -338,7 +346,7 @@ if ! layout_output=$(
       "$work_width" \
       "$work_height" 2>/dev/null
 ); then
-  printf 'Workspace could not calculate a valid terminal grid; no windows were changed.\n' >&2
+  printf 'Multi Codex could not calculate a valid terminal grid; no windows were changed.\n' >&2
   exit 1
 fi
 
@@ -355,7 +363,7 @@ while read -r number frame_x frame_y frame_width frame_height extra; do
       ! [[ "$frame_height" =~ ^[0-9]+$ ]] ||
       [ "$frame_width" -lt 1 ] ||
       [ "$frame_height" -lt 1 ]; then
-    printf 'Workspace received an invalid terminal grid; no windows were changed.\n' >&2
+    printf 'Multi Codex received an invalid terminal grid; no windows were changed.\n' >&2
     exit 1
   fi
 
@@ -370,7 +378,7 @@ while read -r number frame_x frame_y frame_width frame_height extra; do
 done <<< "$layout_output"
 
 if [ "$layout_count" -ne 6 ]; then
-  printf 'Workspace received an incomplete terminal grid; no windows were changed.\n' >&2
+  printf 'Multi Codex received an incomplete terminal grid; no windows were changed.\n' >&2
   exit 1
 fi
 
@@ -380,7 +388,7 @@ fi
 target_desktop=
 if [ "$panel_mode" = false ]; then
   if [ -z "$current_desktop" ]; then
-    printf 'Workspace could not resolve the current desktop; no windows were changed.\n' >&2
+    printf 'Multi Codex could not resolve the current desktop; no windows were changed.\n' >&2
     exit 1
   fi
   target_desktop=$current_desktop

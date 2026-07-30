@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import {
     collectCompleteWorkspaceWindows,
-} from '../extensions/workspace@wenbo/workspaceWindowSet.mjs';
+} from '../extension/workspaceWindowSet.mjs';
 
 
 function windowForSlot(slot) {
@@ -56,7 +56,7 @@ test('a missing or duplicate slot cannot use the complete-set recall path', () =
 test('panel activation recalls only after successful reconciliation', () => {
     const source = readFileSync(
         new URL(
-            '../extensions/workspace@wenbo/extension.js',
+            '../extension/extension.js',
             import.meta.url
         ),
         'utf8'

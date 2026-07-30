@@ -3,7 +3,7 @@
 set -uo pipefail
 
 usage() {
-  printf 'Usage: workspace [--panel]\n'
+  printf 'Usage: multi-codex [--panel]\n'
 }
 
 panel_mode=false
@@ -23,16 +23,24 @@ case "$#" in
     ;;
 esac
 
-layout_command=${WORKSPACE_LAYOUT_COMMAND:-/home/wenbo/.local/bin/open-six-terminals}
+if ! script_dir=$(
+    CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
+      pwd -P
+); then
+  printf 'Multi Codex could not resolve its runtime directory.\n' >&2
+  exit 1
+fi
+
+layout_command=${MULTI_CODEX_LAYOUT_COMMAND:-"$script_dir/open-six-terminals"}
 declare -ar layout_invocation=(
-  env WORKSPACE_LAYOUT_BOUNDED=1 "$layout_command"
+  env MULTI_CODEX_LAYOUT_BOUNDED=1 "$layout_command"
 )
 
-readonly WORKSPACE_TIMEOUT_SECONDS=18
+readonly ACTIVATION_TIMEOUT_SECONDS=18
 readonly CLEANUP_TIMEOUT_SECONDS=5
 readonly LAYOUT_STATUS_MISSING=3
 readonly LAYOUT_STATUS_STARTING=4
-deadline=$((SECONDS + WORKSPACE_TIMEOUT_SECONDS))
+deadline=$((SECONDS + ACTIVATION_TIMEOUT_SECONDS))
 
 run_before_deadline() {
   local remaining=$((deadline - SECONDS))
@@ -104,7 +112,7 @@ finish() {
   trap - EXIT HUP INT TERM
   if [ "$completed" != true ]; then
     if ! cleanup_created; then
-      printf 'Workspace rollback could not be confirmed; check workspace-terminal-*.service manually.\n' >&2
+      printf 'Multi Codex rollback could not be confirmed; check multi-codex-terminal-*.service manually.\n' >&2
     fi
   fi
   exit "$exit_status"
@@ -114,9 +122,9 @@ trap 'exit 130' HUP INT TERM
 
 abort_creation() {
   if [ "${#created_units[@]}" -eq 0 ] && [ -z "$launching_unit" ]; then
-    printf 'Workspace could not obtain a complete six-terminal set; existing sessions were preserved.\n' >&2
+    printf 'Multi Codex could not obtain a complete six-terminal set; existing sessions were preserved.\n' >&2
   else
-    printf 'Workspace could not create a complete six-terminal set; rolling back only the newly created sessions.\n' >&2
+    printf 'Multi Codex could not create a complete six-terminal set; rolling back only the newly created sessions.\n' >&2
   fi
   exit 1
 }
@@ -137,20 +145,20 @@ declare -A seen_slots
 seen_slots=()
 for i in "${missing_slots[@]}"; do
   if ! [[ "$i" =~ ^[1-6]$ ]] || [ -n "${seen_slots[$i]:-}" ]; then
-    printf 'Workspace received an invalid slot list from the layout helper.\n' >&2
+    printf 'Multi Codex received an invalid slot list from the layout helper.\n' >&2
     abort_creation
   fi
   seen_slots[$i]=1
 done
 
 for i in "${missing_slots[@]}"; do
-  launching_unit="workspace-terminal-$i.service"
+  launching_unit="multi-codex-terminal-$i.service"
   if run_before_deadline systemd-run --user \
       --quiet \
       --collect \
       --property=PartOf=graphical-session.target \
       --property=After=graphical-session.target \
-      --unit="workspace-terminal-$i" \
+      --unit="multi-codex-terminal-$i" \
       --setenv=GDK_BACKEND=x11 \
       /usr/bin/ptyxis --standalone "--title=Terminal $i"; then
     created_units+=("$launching_unit")

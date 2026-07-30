@@ -1,7 +1,7 @@
 {
-  "uuid": "workspace@wenbo",
-  "name": "Workspace",
+  "uuid": "multi-codex@wenbo",
+  "name": "Multi Codex",
   "description": "Creates, recalls, and arranges a six-terminal Codex workspace from the GNOME panel.",
   "shell-version": ["50"],
-  "version": 9
+  "version": 1
 }

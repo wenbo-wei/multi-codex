@@ -21,7 +21,7 @@ function validatedWorkArea(workArea) {
         height: integerProperty(workArea.height, 'workArea.height'),
     };
     if (area.width < COLUMN_COUNT || area.height < ROW_COUNT)
-        throw new RangeError('workArea is too small for the Workspace grid');
+        throw new RangeError('workArea is too small for the Multi Codex grid');
     return area;
 }
 

@@ -12,14 +12,17 @@ case "${1:-}" in
     ;;
 esac
 
-task_root=/home/wenbo/codex/workspace-placement-review
-runtime_dir=$(mktemp -d /tmp/workspace-placement-runtime.XXXXXX)
-data_dir=$(mktemp -d /tmp/workspace-placement-data.XXXXXX)
-config_dir=$(mktemp -d /tmp/workspace-placement-config.XXXXXX)
-cache_dir=$(mktemp -d /tmp/workspace-placement-cache.XXXXXX)
-log_file=$(mktemp /tmp/workspace-placement-log.XXXXXX)
+task_root=$(
+  CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
+    pwd -P
+)
+runtime_dir=$(mktemp -d /tmp/multi-codex-placement-runtime.XXXXXX)
+data_dir=$(mktemp -d /tmp/multi-codex-placement-data.XXXXXX)
+config_dir=$(mktemp -d /tmp/multi-codex-placement-config.XXXXXX)
+cache_dir=$(mktemp -d /tmp/multi-codex-placement-cache.XXXXXX)
+log_file=$(mktemp /tmp/multi-codex-placement-log.XXXXXX)
 chmod 700 "$runtime_dir" "$data_dir" "$config_dir" "$cache_dir"
-extension_dir=$data_dir/gnome-shell/extensions/workspace-placement-harness@wenbo
+extension_dir=$data_dir/gnome-shell/extensions/multi-codex-placement-harness@wenbo
 mkdir -p "$extension_dir"
 ln -s \
   "$task_root/harness/extension.js" \
@@ -28,10 +31,10 @@ ln -s \
   "$task_root/harness/metadata.json" \
   "$extension_dir/metadata.json"
 ln -s \
-  "$task_root/extensions/workspace@wenbo/workspaceLayout.mjs" \
+  "$task_root/extension/workspaceLayout.mjs" \
   "$extension_dir/workspaceLayout.mjs"
 ln -s \
-  "$task_root/extensions/workspace@wenbo/workspaceWindowPlacement.mjs" \
+  "$task_root/extension/workspaceWindowPlacement.mjs" \
   "$extension_dir/workspaceWindowPlacement.mjs"
 
 cleanup() {
@@ -63,11 +66,11 @@ timeout \
     XDG_CONFIG_HOME="$config_dir" \
     XDG_CACHE_HOME="$cache_dir" \
     GIO_USE_VFS=local \
-    WORKSPACE_HARNESS_MODE="$mode" \
+    MULTI_CODEX_HARNESS_MODE="$mode" \
   dbus-run-session -- bash -c '
     gsettings set org.gnome.shell disable-user-extensions false
     gsettings set org.gnome.shell enabled-extensions \
-      "[\"workspace-placement-harness@wenbo\"]"
+      "[\"multi-codex-placement-harness@wenbo\"]"
     exec gnome-shell \
       --headless \
       --virtual-monitor=1280x720 \
@@ -76,8 +79,8 @@ timeout \
 shell_status=$?
 set -e
 
-rg --fixed-strings '[WORKSPACE-HARNESS]' "$log_file" || true
-result=$(rg --fixed-strings '[WORKSPACE-HARNESS] RESULT' "$log_file" || true)
+rg --fixed-strings '[MULTI-CODEX-HARNESS]' "$log_file" || true
+result=$(rg --fixed-strings '[MULTI-CODEX-HARNESS] RESULT' "$log_file" || true)
 if [ -z "$result" ]; then
   printf 'Harness produced no result (shell status %s).\n' \
     "$shell_status" >&2

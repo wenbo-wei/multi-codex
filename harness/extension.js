@@ -12,15 +12,15 @@ import {
 import {workspaceFrameForSlot} from './workspaceLayout.mjs';
 
 
-const PREFIX = '[WORKSPACE-HARNESS]';
+const PREFIX = '[MULTI-CODEX-HARNESS]';
 const SLOT_COUNT = 6;
 const HELPER_DELAY_MS = 600;
 const RESULT_TIMEOUT_MS = 7000;
 
 
-export default class WorkspacePlacementHarness extends Extension {
+export default class MultiCodexPlacementHarness extends Extension {
     enable() {
-        this._mode = GLib.getenv('WORKSPACE_HARNESS_MODE') ?? 'v7';
+        this._mode = GLib.getenv('MULTI_CODEX_HARNESS_MODE') ?? 'v7';
         this._placements = new Map();
         this._processes = [];
         this._firstFrameSamples = 0;
