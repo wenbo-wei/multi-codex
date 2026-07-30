@@ -18,9 +18,9 @@ import {
 import {
     collectCompleteWorkspaceWindows,
 } from './workspaceWindowSet.mjs';
+import {runtimeCommandArgv} from './runtimeCommand.mjs';
 
 
-const COMMAND_FILENAME = 'multi-codex';
 const CODEX_DASHBOARD_ROLE = 'codex-quota-centre@local';
 const CODEX_SOURCE_INDICATOR_ID = 'codex-quota';
 const COMMAND_TIMEOUT_MS = 30000;
@@ -65,11 +65,10 @@ class MultiCodexPanelButton extends PanelMenu.Button {
 export default class MultiCodexExtension extends Extension {
     enable() {
         this._enabled = true;
-        this._commandPath = GLib.build_filenamev([
+        this._commandArgv = runtimeCommandArgv(
             this.path,
-            'scripts',
-            COMMAND_FILENAME,
-        ]);
+            parts => GLib.build_filenamev(parts)
+        );
         this._placing = false;
         this._placeSource = 0;
         this._button = null;
@@ -141,7 +140,7 @@ export default class MultiCodexExtension extends Extension {
         }
         this._destroyButton();
         this._placing = false;
-        this._commandPath = null;
+        this._commandArgv = null;
     }
 
     _panelBox(property) {
@@ -641,8 +640,8 @@ export default class MultiCodexExtension extends Extension {
         if (!this._enabled || this._terminalProcess)
             return;
 
-        const commandPath = this._commandPath;
-        if (!commandPath)
+        const commandArgv = this._commandArgv;
+        if (!commandArgv)
             return;
 
         const generation = this._runGeneration;
@@ -650,7 +649,7 @@ export default class MultiCodexExtension extends Extension {
         let process;
         try {
             process = Gio.Subprocess.new(
-                [commandPath, '--panel'],
+                commandArgv,
                 Gio.SubprocessFlags.STDOUT_SILENCE |
                     Gio.SubprocessFlags.STDERR_SILENCE
             );

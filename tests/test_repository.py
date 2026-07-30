@@ -44,12 +44,47 @@ class RepositoryTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("this.path", extension_source)
-        self.assertIn("'scripts'", extension_source)
-        self.assertIn("COMMAND_FILENAME", extension_source)
+        self.assertIn("runtimeCommandArgv", extension_source)
 
     def test_runtime_scripts_are_executable(self) -> None:
         for name in ("multi-codex", "open-six-terminals"):
             self.assertTrue(os.access(SCRIPTS / name, os.X_OK), name)
+
+    def test_package_is_reproducible_across_source_mtimes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary_root = Path(directory) / "repository"
+            temporary_tools = temporary_root / "tools"
+            temporary_tools.mkdir(parents=True)
+            shutil.copytree(EXTENSION, temporary_root / "extension")
+            shutil.copy2(
+                ROOT / "tools" / "package.sh",
+                temporary_tools / "package.sh",
+            )
+            environment = os.environ.copy()
+            environment["SOURCE_DATE_EPOCH"] = "1785369600"
+
+            packages = []
+            for build, timestamp in enumerate((946684800, 1893456000), 1):
+                for path in (temporary_root / "extension").rglob("*"):
+                    os.utime(path, (timestamp, timestamp))
+                output = Path(directory) / f"dist-{build}"
+                subprocess.run(
+                    [str(temporary_tools / "package.sh"), str(output)],
+                    env=environment,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                )
+                packages.append(
+                    (
+                        output
+                        / "multi-codex@wenbo.shell-extension.zip"
+                    ).read_bytes()
+                )
+
+            self.assertEqual(packages[0], packages[1])
 
     def test_runner_finds_bundled_helper_from_arbitrary_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

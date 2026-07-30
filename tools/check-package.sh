@@ -17,6 +17,7 @@ expected=$(
   printf '%s\n' \
     extension.js \
     metadata.json \
+    runtimeCommand.mjs \
     scripts/multi-codex \
     scripts/open-six-terminals \
     stylesheet.css \

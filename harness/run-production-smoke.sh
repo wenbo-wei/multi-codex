@@ -2,37 +2,45 @@
 
 set -euo pipefail
 
-task_root=$(
-  CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
-    pwd -P
+if [ "$#" -ne 1 ]; then
+  printf 'Usage: run-production-smoke.sh PACKAGE\n' >&2
+  exit 2
+fi
+
+package=$1
+if [ ! -f "$package" ]; then
+  printf 'Package not found: %s\n' "$package" >&2
+  exit 1
+fi
+
+metadata_values=$(
+  unzip -p "$package" metadata.json |
+    python3 -c \
+      'import json,sys; data=json.load(sys.stdin); print(data["uuid"], data["version"], sep="\t")'
 )
-metadata=$task_root/extension/metadata.json
-uuid=$(
-  python3 -c \
-    'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' \
-    "$metadata"
-)
-version=$(
-  python3 -c \
-    'import json,sys; print(json.load(open(sys.argv[1]))["version"])' \
-    "$metadata"
-)
+IFS=$'\t' read -r uuid version <<< "$metadata_values"
+if ! [[ "$uuid" =~ ^[A-Za-z0-9._@-]+$ ]] ||
+    ! [[ "$version" =~ ^[0-9]+$ ]]; then
+  printf 'Package metadata has an invalid UUID or version.\n' >&2
+  exit 1
+fi
+
 runtime_dir=$(mktemp -d /tmp/multi-codex-smoke-runtime.XXXXXX)
 data_dir=$(mktemp -d /tmp/multi-codex-smoke-data.XXXXXX)
 config_dir=$(mktemp -d /tmp/multi-codex-smoke-config.XXXXXX)
 cache_dir=$(mktemp -d /tmp/multi-codex-smoke-cache.XXXXXX)
 log_file=$(mktemp /tmp/multi-codex-smoke-log.XXXXXX)
 chmod 700 "$runtime_dir" "$data_dir" "$config_dir" "$cache_dir"
-mkdir -p "$data_dir/gnome-shell/extensions"
-ln -s \
-  "$task_root/extension" \
-  "$data_dir/gnome-shell/extensions/$uuid"
 
 cleanup() {
   rm -rf -- "$runtime_dir" "$data_dir" "$config_dir" "$cache_dir"
   rm -f -- "$log_file"
 }
 trap cleanup EXIT HUP INT TERM
+
+extension_dir=$data_dir/gnome-shell/extensions/$uuid
+mkdir -p "$extension_dir"
+unzip -q "$package" -d "$extension_dir"
 
 timeout \
   --signal=TERM \

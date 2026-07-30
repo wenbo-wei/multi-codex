@@ -39,6 +39,12 @@ Multi-monitor support has not been validated.
 
 ## Build and test
 
+Build and test dependencies are GNU Make, Git, GNOME's `gnome-extensions`
+tool, Node.js 18 or later, Python 3, `ripgrep`, `unzip`, and standard GNU
+file utilities. A source archive without Git metadata can set
+`SOURCE_DATE_EPOCH` explicitly; otherwise packaging uses the latest commit
+timestamp.
+
 ```sh
 make test
 make package
