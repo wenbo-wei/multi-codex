@@ -45,6 +45,32 @@ if ! script_dir=$(
 fi
 extension_dir=$script_dir/..
 layout_cli=${MULTI_CODEX_LAYOUT_CLI:-"$extension_dir/workspaceLayoutCli.mjs"}
+ptyxis_bin=${MULTI_CODEX_PTYXIS_BIN:-}
+if [ -z "$ptyxis_bin" ]; then
+  if ! ptyxis_bin=$(command -v ptyxis); then
+    printf 'Multi Codex requires Ptyxis on PATH.\n' >&2
+    exit 1
+  fi
+fi
+if [ ! -x "$ptyxis_bin" ]; then
+  printf 'Multi Codex cannot execute Ptyxis: %s\n' "$ptyxis_bin" >&2
+  exit 1
+fi
+gjs_bin=${MULTI_CODEX_GJS_BIN:-}
+if [ -z "$gjs_bin" ]; then
+  if ! gjs_bin=$(command -v gjs); then
+    printf 'Multi Codex requires GJS on PATH.\n' >&2
+    exit 1
+  fi
+fi
+if [ ! -x "$gjs_bin" ]; then
+  printf 'Multi Codex cannot execute GJS: %s\n' "$gjs_bin" >&2
+  exit 1
+fi
+ptyxis_pattern=$(
+  printf '%s\n' "$ptyxis_bin" |
+    sed 's#[][\\.^$*+?(){}|]#\\&#g'
+)
 readonly SHADOW_PIXELS=25
 readonly LAYOUT_STATUS_MISSING=3
 readonly LAYOUT_STATUS_STARTING=4
@@ -82,7 +108,7 @@ resolve_terminal_slot() {
 
   if pid_output=$(
       run_command pgrep -f -- \
-        "^/usr/bin/ptyxis --standalone --title=Terminal $number$" \
+        "^$ptyxis_pattern --standalone --title=Terminal $number$" \
         2>/dev/null
   ); then
     mapfile -t pids <<< "$pid_output"
@@ -338,7 +364,7 @@ fi
 # Ptyxis' 25 px transparent shadow to each canonical visible frame.
 layout_output=
 if ! layout_output=$(
-    run_command /usr/bin/gjs \
+    run_command "$gjs_bin" \
       -m \
       "$layout_cli" \
       "$work_x" \

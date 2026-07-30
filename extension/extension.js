@@ -20,8 +20,6 @@ import {
 } from './workspaceWindowSet.mjs';
 
 
-const CODEX_DASHBOARD_ROLE = 'codex-quota-centre@local';
-const CODEX_SOURCE_INDICATOR_ID = 'codex-quota';
 const COMMAND_TIMEOUT_MS = 30000;
 const COMMAND_TERMINATE_GRACE_MS = 8000;
 
@@ -68,6 +66,7 @@ export default class MultiCodexExtension extends Extension {
             GLib.build_filenamev([this.path, 'scripts', 'multi-codex']),
             '--panel',
         ];
+        this._ptyxisPath = GLib.find_program_in_path('ptyxis');
         this._placing = false;
         this._placeSource = 0;
         this._button = null;
@@ -79,9 +78,6 @@ export default class MultiCodexExtension extends Extension {
         this._windowCreatedSignal = 0;
         this._windowPlacements = new Map();
         this._revealLater = 0;
-        this._legacyAppearanceSignals = [];
-        this._legacyIndicator = null;
-        this._legacyIndicatorSignals = [];
         this._runGeneration = (this._runGeneration ?? 0) + 1;
 
         this._destroyLegacyInjectedButton();
@@ -96,8 +92,6 @@ export default class MultiCodexExtension extends Extension {
             this._warn('Could not watch for new Terminal windows', error);
         }
 
-        this._connectLegacyIndicatorSignals();
-        this._watchLegacyIndicator(this._findLegacyCodexIndicator());
         this._schedulePlacement();
     }
 
@@ -119,7 +113,6 @@ export default class MultiCodexExtension extends Extension {
                 );
             }
         }
-        this._disconnectLegacyIndicatorSignals();
         if (this._windowCreatedSignal) {
             try {
                 global.display.disconnect(this._windowCreatedSignal);
@@ -140,6 +133,7 @@ export default class MultiCodexExtension extends Extension {
         this._destroyButton();
         this._placing = false;
         this._commandArgv = null;
+        this._ptyxisPath = null;
     }
 
     _panelBox(property) {
@@ -160,136 +154,6 @@ export default class MultiCodexExtension extends Extension {
             this._warn('Could not access the date menu', error);
             return null;
         }
-    }
-
-    _findCodexContainer() {
-        let statusArea;
-        try {
-            statusArea = Main.panel?.statusArea ?? {};
-        } catch (error) {
-            this._warn('Could not inspect the panel status area', error);
-            return null;
-        }
-
-        // Prefer the dashboard registered by its GNOME status-area role.
-        // Falling back to the date menu while it exists would make Multi Codex
-        // and the dashboard continually compete for the same panel position.
-        const dashboardContainer =
-            statusArea[CODEX_DASHBOARD_ROLE]?.container;
-        if (this._isActor(dashboardContainer))
-            return dashboardContainer;
-
-        // Keep compatibility with the original Ubuntu AppIndicator, but do
-        // not anchor to its invisible placeholder.
-        const legacyIndicator = this._findLegacyCodexIndicator(statusArea);
-        if (legacyIndicator?.visible !== false &&
-            this._isActor(legacyIndicator?.container))
-            return legacyIndicator.container;
-        return null;
-    }
-
-    _findLegacyCodexIndicator(statusArea = null) {
-        try {
-            const items = statusArea ?? Main.panel?.statusArea ?? {};
-            return Object.values(items).find(
-                item => item?._indicator?.id === CODEX_SOURCE_INDICATOR_ID &&
-                    this._isActor(item?.container)
-            ) ?? null;
-        } catch (error) {
-            this._warn('Could not inspect legacy Codex indicators', error);
-            return null;
-        }
-    }
-
-    _connectLegacyIndicatorSignals() {
-        for (const property of ['_leftBox', '_centerBox', '_rightBox']) {
-            const box = this._panelBox(property);
-            if (!box)
-                continue;
-            try {
-                const signalId = box.connect(
-                    'child-added',
-                    (_container, actor) => {
-                        const indicator = this._findLegacyCodexIndicator();
-                        if (indicator?.container !== actor)
-                            return;
-                        this._watchLegacyIndicator(indicator);
-                        this._schedulePlacement();
-                    }
-                );
-                this._legacyAppearanceSignals.push({box, signalId});
-            } catch (error) {
-                this._warn(
-                    'Could not watch for the legacy Codex indicator',
-                    error
-                );
-            }
-        }
-    }
-
-    _watchLegacyIndicator(indicator) {
-        if (!indicator ||
-            indicator?._indicator?.id !== CODEX_SOURCE_INDICATOR_ID)
-            return;
-        if (this._legacyIndicator === indicator)
-            return;
-        this._disconnectLegacyIndicatorWatch();
-        this._legacyIndicator = indicator;
-        this._legacyIndicatorSignals = [];
-        try {
-            const visibleSignal = indicator.connect(
-                'notify::visible',
-                () => {
-                    if (this._legacyIndicator === indicator)
-                        this._schedulePlacement();
-                }
-            );
-            this._legacyIndicatorSignals.push({
-                actor: indicator,
-                signalId: visibleSignal,
-            });
-            const destroySignal = indicator.connect('destroy', () => {
-                if (this._legacyIndicator !== indicator)
-                    return;
-                this._legacyIndicator = null;
-                this._legacyIndicatorSignals = [];
-                this._schedulePlacement();
-            });
-            this._legacyIndicatorSignals.push({
-                actor: indicator,
-                signalId: destroySignal,
-            });
-        } catch (error) {
-            this._warn(
-                'Could not watch legacy Codex indicator visibility',
-                error
-            );
-            this._disconnectLegacyIndicatorWatch();
-        }
-    }
-
-    _disconnectLegacyIndicatorWatch() {
-        for (const {actor, signalId} of this._legacyIndicatorSignals) {
-            try {
-                actor.disconnect(signalId);
-            } catch {
-                // The legacy indicator may already have been destroyed.
-            }
-        }
-        this._legacyIndicatorSignals = [];
-        this._legacyIndicator = null;
-    }
-
-    _disconnectLegacyIndicatorSignals() {
-        this._disconnectLegacyIndicatorWatch();
-        for (const {box, signalId} of this._legacyAppearanceSignals) {
-            try {
-                box.disconnect(signalId);
-            } catch {
-                // The panel box may already have been disposed.
-            }
-        }
-        this._legacyAppearanceSignals = [];
     }
 
     _schedulePlacement() {
@@ -330,12 +194,7 @@ export default class MultiCodexExtension extends Extension {
             this._indexOf(centreBox, dateContainer) < 0)
             return false;
 
-        const codexContainer = this._findCodexContainer();
-        const anchor = codexContainer &&
-            this._parentOf(codexContainer) === centreBox
-            ? codexContainer
-            : dateContainer;
-        return this._moveAfter(buttonContainer, centreBox, anchor);
+        return this._moveAfter(buttonContainer, centreBox, dateContainer);
     }
 
     _createButton() {
@@ -349,12 +208,7 @@ export default class MultiCodexExtension extends Extension {
 
         const centreBox = this._panelBox('_centerBox');
         const dateContainer = this._dateMenuContainer();
-        const codexContainer = this._findCodexContainer();
-        const anchor = codexContainer &&
-            this._parentOf(codexContainer) === centreBox
-            ? codexContainer
-            : dateContainer;
-        const anchorIndex = this._indexOf(centreBox, anchor);
+        const anchorIndex = this._indexOf(centreBox, dateContainer);
         const position = anchorIndex >= 0 ? anchorIndex + 1 : 0;
 
         try {
@@ -782,8 +636,9 @@ export default class MultiCodexExtension extends Extension {
                         .decode(contents)
                         .split('\0')
                         .filter(Boolean);
-                    const match = args.length === 3 &&
-                        args[0] === '/usr/bin/ptyxis' &&
+                    const match = this._ptyxisPath &&
+                        args.length === 3 &&
+                        args[0] === this._ptyxisPath &&
                         args[1] === '--standalone'
                         ? /^--title=Terminal ([1-6])$/.exec(args[2])
                         : null;

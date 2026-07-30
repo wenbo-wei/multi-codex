@@ -35,6 +35,18 @@ layout_command=${MULTI_CODEX_LAYOUT_COMMAND:-"$script_dir/open-six-terminals"}
 declare -ar layout_invocation=(
   env MULTI_CODEX_LAYOUT_BOUNDED=1 "$layout_command"
 )
+ptyxis_bin=${MULTI_CODEX_PTYXIS_BIN:-}
+if [ -z "$ptyxis_bin" ]; then
+  if ! ptyxis_bin=$(command -v ptyxis); then
+    printf 'Multi Codex requires Ptyxis on PATH.\n' >&2
+    exit 1
+  fi
+fi
+if [ ! -x "$ptyxis_bin" ]; then
+  printf 'Multi Codex cannot execute Ptyxis: %s\n' "$ptyxis_bin" >&2
+  exit 1
+fi
+export MULTI_CODEX_PTYXIS_BIN=$ptyxis_bin
 
 readonly ACTIVATION_TIMEOUT_SECONDS=18
 readonly CLEANUP_TIMEOUT_SECONDS=5
@@ -160,7 +172,7 @@ for i in "${missing_slots[@]}"; do
       --property=After=graphical-session.target \
       --unit="multi-codex-terminal-$i" \
       --setenv=GDK_BACKEND=x11 \
-      /usr/bin/ptyxis --standalone "--title=Terminal $i"; then
+      "$ptyxis_bin" --standalone "--title=Terminal $i"; then
     created_units+=("$launching_unit")
     launching_unit=
   else

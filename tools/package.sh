@@ -43,6 +43,12 @@ validation_dir=$staging_root/validated
 canonical_dir=$staging_root/canonical
 mkdir -p "$staged_extension" "$validation_dir" "$canonical_dir"
 cp -a "$repository_root/extension/." "$staged_extension/"
+cp -a "$repository_root/LICENSE" "$staged_extension/LICENSE"
+find "$staged_extension" -type d -exec chmod 0755 {} +
+find "$staged_extension" -type f -exec chmod 0644 {} +
+chmod 0755 \
+  "$staged_extension/scripts/multi-codex" \
+  "$staged_extension/scripts/open-six-terminals"
 find "$staged_extension" -exec \
   touch -h --date="@$source_date_epoch" {} +
 
@@ -53,6 +59,7 @@ TZ=UTC LC_ALL=C gnome-extensions pack \
   --extra-source=workspaceLayoutCli.mjs \
   --extra-source=workspaceWindowPlacement.mjs \
   --extra-source=workspaceWindowSet.mjs \
+  --extra-source=LICENSE \
   --extra-source=scripts \
   "$staged_extension"
 
@@ -64,6 +71,11 @@ if [ "${#validated_packages[@]}" -ne 1 ]; then
 fi
 
 unzip -q "${validated_packages[0]}" -d "$canonical_dir"
+find "$canonical_dir" -type d -exec chmod 0755 {} +
+find "$canonical_dir" -type f -exec chmod 0644 {} +
+chmod 0755 \
+  "$canonical_dir/scripts/multi-codex" \
+  "$canonical_dir/scripts/open-six-terminals"
 find "$canonical_dir" -exec \
   touch -h --date="@$source_date_epoch" {} +
 file_list=$staging_root/package-files

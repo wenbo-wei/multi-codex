@@ -3,5 +3,5 @@
   "name": "Multi Codex",
   "description": "Creates, recalls, and arranges a six-terminal Codex workspace from the GNOME panel.",
   "shell-version": ["50"],
-  "version": 1
+  "version": 2
 }
